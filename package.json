@@ -1,0 +1,35 @@
+{
+  "name": "testapi6-mockapi",
+  "version": "1.1.0",
+  "description": "Create a API mocking",
+  "main": "dist/index.js",
+  "scripts": {
+    "doc": "typedoc --tsconfig tsconfig.doc.json --watch src/index.ts",
+    "build:doc": "rm -rf docs && typedoc --plugin typedoc-plugin-markdown --tsconfig tsconfig.doc.json src/index.ts",
+    "pub": "npm publish",
+    "dev": "nodemon --watch src --watch modules --ext .ts --exec 'node -r ts-node/register -r ./bin/tsconfig-paths-bootstrap.js --expose-gc --harmony --inspect src/index.ts test'",
+    "build": "yarn clean && tsc && yarn build:resolve-module",
+    "build:resolve-module": "node bin/tsconfig",
+    "clean": "rm -rf dist && rm -rf node_modules/knex/types"
+  },
+  "dependencies": {
+    "@koa/cors": "^3.1.0",
+    "@koa/router": "^10.0.0",
+    "chalk": "^4.1.0",
+    "koa": "^2.13.1",
+    "koa-static": "^5.0.0",
+    "lodash": "^4.17.21"
+  },
+  "author": "doanthuanthanh88@gmail.com",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/lodash": "^4.14.122",
+    "@types/node": "^14.14.6",
+    "nodemon": "^2.0.2",
+    "testapi6": "^1.1.0",
+    "ts-node": "^8.8.2",
+    "typedoc": "^0.20.32",
+    "typedoc-plugin-markdown": "^3.6.0",
+    "typescript": "^3.8.3"
+  }
+}

@@ -1,3 +1,5 @@
+testapi6-mockapi / [Exports](modules.md)
+
 # testapi6-redis
 Execute redis command
 
