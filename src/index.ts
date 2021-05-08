@@ -1,4 +1,4 @@
-export * from './MockApi'
+export { MockApi } from './MockApi'
 
 // import { MockApi } from './MockApi'
 
