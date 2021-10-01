@@ -5,32 +5,68 @@ import http from 'http'
 import https from 'https'
 import Koa from 'koa'
 import serve from 'koa-static'
-import { Tag } from "testapi6/dist/components/Tag"
+import { cloneDeep } from 'lodash'
+import { replaceVars, Tag } from "testapi6/dist/components/Tag"
 import { Testcase } from 'testapi6/dist/components/Testcase'
+import bodyParser from 'koa-body'
+import path from 'path'
 
 /**
  * Create a mock API service
  * 
  * ```yaml
- * - MockApi:
- *     title: Start mock server
- *     port: 443
- *     host: 0.0.0.0
- *     https: true
- *     # https:
- *     #   key: https key string
- *     #   cert: https cert string
+ * - testapi6-mockapi.HttpsServer:
+ *     title: 'Test https server',
+ *     port: 4430,
+ *     https:
+ *       key: https key string
+ *       cert: https cert string
  *     routers:
- *       - root: assets
- *       - method: GET
- *         path: /test/:name
- *         data: [
- *           { name: 1 },
- *           { name: 2 }
- *         ] 
+ *       - serveIn: /Users/doanthuanthanh/code/github/testapi6-mockapi/src # Server static file in this folder
+ *       - path: /upload
+ *         uploadTo: /Users/doanthuanthanh/code/github/testapi6-mockapi/src
+ *       - method: POST
+ *         path: /test/:prname
+ *         response:
+ *           status: 200
+ *           statusMessage: OK
+ *           headers:
+ *             server: nginx
+ *           data:
+ *             queryName: \${$query.name},
+ *             headerName: \${$headers.authorization},
+ *             paramsName: \${$headers.prname}
+ *             reqObj: \${$req.method}
  * ```
  */
-export class MockApi extends Tag {
+export class HttpServer extends Tag {
+  static get des() {
+    return `Create a Http server to mock data`
+  }
+  static get example() {
+    return `- testapi6-mockapi.HttpServer:
+    title: 'Test http server',
+    port: 3000,
+    routers:
+      - serveIn: /static-files # Server static file in this folder
+      - path: /upload
+        uploadTo: /static-files
+      - method: POST
+        path: /test/:prname
+        response:
+          status: 200
+          statusMessage: OK
+          headers:
+            server: nginx
+          data:
+            queryName: \${$query.name},
+            headerName: \${$headers.authorization},
+            paramsName: \${$headers.prname}
+            reqObj: \${$req.method}
+        
+`
+  }
+  static ignores = ['_app', '_router', '_server']
   static readonly KEY = `-----BEGIN RSA PRIVATE KEY-----
   MIIEowIBAAKCAQEAynRSsMcDagvV86OaKAmi3Y7GfUnuYm6IG0PpaNEPD+F/LNNO
   vHGbFouYbHNX6RvejmJVGg9iQGYUnLgY4qipOplaZRKF1kiWzvCJ6xyVaMhKHlEo
@@ -96,54 +132,90 @@ export class MockApi extends Tag {
   /** Define routers */
   routers: {
     /** Serve static files in these folders */
-    root: string
+    serveIn: string
+  }[] | {
+    /** Serve static files in these folders */
+    path: string
+    uploadTo: string
   }[] | {
     /** Http method */
-    method: string | string[]
+    method: string
     /** Http request path */
     path: string
-    /** Respnse status */
-    status?: number
-    /** Response status text */
-    statusText?: string
-    /** Response headers */
-    headers?: any
-    /** Response data */
-    data?: any
+    response?: {
+      /** Respnse status */
+      status?: number
+      /** Response status text */
+      statusText?: string
+      /** Response headers */
+      headers?: any
+      /** Response data */
+      data?: any
+    }
   }[]
 
   _app?: Koa
   _router?: Router
   _server?: http.Server | https.Server
 
-  constructor(attrs: MockApi) {
-    super(attrs)
+  init(attrs: HttpServer) {
+    super.init(attrs)
     this._app = new Koa()
     this._app.use(cors())
     this._router = new Router()
   }
 
-  async prepare(scope, ignore) {
-    await super.prepare(scope, ignore)
+  async prepare(scope?: any) {
+    super.prepare(scope, ['routers'])
     this.routers.forEach(r => {
       if (r.root) {
-        this.context.log(chalk.gray(`- GET ${Testcase.getPathFromRoot(r.root)}/**/*.*`))
+        this.context.log(chalk.gray(`- GET /**/* \t- SERVE IN \t${Testcase.getPathFromRoot(r.root)}/**/*`))
         this._app.use(serve(Testcase.getPathFromRoot(r.root)))
+      } else if (r.upload) {
+        if (!r.method) r.method = 'POST'
+        else r.method = r.method.toUpperCase()
+        this.context.log(chalk.gray(`- ${r.method} ${r.path} \t- UPLOAD TO \t${Testcase.getPathFromRoot(r.upload)}/*`))
+        this._router[r.method.toLowerCase()](r.path, bodyParser({
+          multipart: true,
+          formidable: {
+            uploadDir: r.upload,
+            keepExtensions: true,
+            multiples: true,
+          },
+          urlencoded: true,
+          formLimit: '5000mb',
+        }), (ctx, next) => {
+          const rs = {}
+          if (ctx.request.files) {
+            for (const [key, file] of Object.entries(ctx.request.files)) {
+              rs[key] = path.basename(file['path'])
+            }
+          }
+          ctx.body = rs
+          return next()
+        })
       } else {
         if (!r.method) r.method = 'GET'
+        else r.method = r.method.toUpperCase()
         if (r.path) {
           this.context.log(chalk.gray(`- ${r.method} ${r.path}`))
-          this._router.register(r.path, Array.isArray(r.method) ? r.method : [r.method], (ctx, next) => {
-            if (r.status) ctx.status = r.status
-            if (r.statusText) ctx.message = r.statusText
-            ctx.body = r.data
+          this._router[r.method.toLowerCase()](r.path, bodyParser({
+            multipart: true,
+            urlencoded: true,
+          }), (ctx, next) => {
+            if (r.response?.status) ctx.status = r.response?.status
+            if (r.response?.statusText) ctx.message = r.response?.statusText
+            if (r.response?.data) {
+              ctx.body = cloneDeep(r.response.data)
+              ctx.body = replaceVars(ctx.body, { $params: ctx.params, $headers: ctx.headers, $query: ctx.request.query, $body: ctx.request.body, $: this, $request: ctx.request, $req: ctx.request, $ctx: ctx })
+            }
             return next()
           })
         }
       }
     })
     if (!this.host) this.host = '0.0.0.0'
-    if (!this.port) this.port = this.scheme === 'http' ? 80 : 443
+    if (!this.port) this.port = this.scheme === 'http' ? 8000 : 4430
   }
 
   get scheme() {
@@ -156,8 +228,8 @@ export class MockApi extends Tag {
 
   private get serverOption() {
     return this.scheme === 'http' ? {} : {
-      key: (typeof this.https !== 'boolean' && this.https?.key) || MockApi.KEY,
-      cert: (typeof this.https !== 'boolean' && this.https?.cert) || MockApi.CERT
+      key: (typeof this.https !== 'boolean' && this.https?.key) || HttpServer.KEY,
+      cert: (typeof this.https !== 'boolean' && this.https?.cert) || HttpServer.CERT
     }
   }
 
@@ -195,5 +267,40 @@ export class MockApi extends Tag {
       this.context.log(chalk.green('Listening at %s://%s:%d'), this.scheme, this.host, this.port)
       this.context.groupEnd()
     })
+  }
+}
+
+export class HttpsServer extends HttpServer {
+  static get des() {
+    return `Create a Https server to mock data`
+  }
+  static get example() {
+    return `- testapi6-mockapi.HttpsServer:
+    title: 'Test https server',
+    port: 4430,
+    https:
+      key: https key string
+      cert: https cert string
+    routers:
+      - serveIn: /Users/doanthuanthanh/code/github/testapi6-mockapi/src # Server static file in this folder
+      - path: /upload
+        uploadTo: /Users/doanthuanthanh/code/github/testapi6-mockapi/src
+      - method: POST
+        path: /test/:prname
+        response:
+          status: 200
+          statusMessage: OK
+          headers:
+            server: nginx
+          data:
+            queryName: \${$query.name},
+            headerName: \${$headers.authorization},
+            paramsName: \${$headers.prname}
+            reqObj: \${$req.method}
+`
+  }
+  constructor() {
+    super()
+    this.https = true
   }
 }

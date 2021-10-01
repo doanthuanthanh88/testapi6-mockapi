@@ -1,0 +1,26 @@
+# - Post:
+#     url: http://localhost:5000/test/{ID}
+#     debug: details
+#     params:
+#       ID: 1
+#     query:
+#       class: '01'
+#     headers:
+#       Authorization: Bearer here
+#       # content-type: multipart/form-data
+#     body:
+#       name: thanh
+#       # file: !upload /Users/doanthuanthanh/code/github/testapi6-mockapi/test/test.yaml
+
+
+- Post:
+    url: http://localhost:5000/upload
+    debug: details
+    headers:
+      Authorization: Bearer here
+      content-type: multipart/form-data
+    body:
+      name: thanh
+      files: !upload /Users/doanthuanthanh/code/github/testapi6-mockapi/test/test.yaml
+
+

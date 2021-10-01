@@ -15,5 +15,11 @@
         // "**/tslint.json": true,
         // "**/tsfmt.json": true,
         // "**/tsconfig.json": true
-    }
+    },
+    "yaml.customTags": [
+        "!upload scalar",
+        "!remove scalar",
+        "!keep scalar",
+        "!erase scalar"
+    ]
 }
